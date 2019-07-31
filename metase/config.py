@@ -17,5 +17,7 @@ DEFAULT_CONFIG = {
         'Connection': 'keep-alive',
         'Upgrade-Insecure-Requests': '1'
     },
-    'user_agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/75.0.3770.142 Safari/537.36'
+    'user_agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/75.0.3770.142 Safari/537.36',
+    'api_version': '1',
+    'api_secret': ''
 }

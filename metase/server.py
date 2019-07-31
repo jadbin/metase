@@ -9,15 +9,16 @@ import random
 from urllib.request import urljoin
 import math
 import time
+import hashlib
 
 from tornado.web import Application, RequestHandler
-from tornado.httpclient import HTTPRequest
 from tornado.curl_httpclient import CurlAsyncHTTPClient
 
 from xpaw import Downloader, HttpRequest, HttpHeaders
 from xpaw.errors import HttpError, ClientError
 
 from metase.search_engine import load_search_engines, SearchEngine
+from metase.slave import Slave
 
 log = logging.getLogger(__name__)
 
@@ -44,13 +45,13 @@ class MseServer:
                 'allow': '*'
             }]
         self.slave_map = self._make_slave_map(slaves)
-        self.api_version = self.config.get('api_version', 1)
+        self.api_version = self.config.get('api_version')
         self.downloader = Downloader(max_clients=config.get('max_clients'))
 
     def on_start(self):
         app = Application([
-            (r'/api/v1/search', SearchHandler, dict(server=self)),
-            (r'/api/v1/task', TaskHanlder, dict(server=self))
+            ('/api/v{}/search'.format(self.api_version), SearchHandler, dict(server=self)),
+            ('/api/v{}/fetch'.format(self.api_version), FetchHanlder, dict(server=self))
         ])
         app.listen(self.config.get('port'), self.config.get('host'))
 
@@ -115,32 +116,26 @@ class MseServer:
     def _make_slave_map(self, slaves):
         slave_map = defaultdict(list)
         for s in slaves:
+            slave = Slave(s['address'], self)
             if s['allow'] == '*':
                 allows = [i for i in self.search_engines]
             else:
                 allows = s['allow'].split(',')
             for a in allows:
-                slave_map[a.strip()].append(s['address'])
+                slave_map[a.strip()].append(slave)
         return slave_map
 
     async def _get_response(self, request, name, result, index):
-        slave = self.slave_available(name)
+        slave = self._slave_available(name)
         if slave is None:
             return
         try:
-            url = self._slave_task_url(slave)
-            body = pickle.dumps(request)
-            timeout = self.config.get('timeout')
-            req_headers = {'Content-Type': 'application/octet-stream'}
-            req = HTTPRequest(url, method='POST', headers=req_headers, body=body,
-                              connect_timeout=timeout, request_timeout=timeout)
-            resp = await self.http_client.fetch(req)
-            real_resp = pickle.loads(resp.body)
-            result[index] = real_resp
+            resp = await slave.fetch(request)
+            result[index] = resp
         except Exception as e:
             log.warning('Failed request slave %s: %s', slave, e)
 
-    def slave_available(self, name):
+    def _slave_available(self, name):
         """
         选择一个可用的工作节点
         """
@@ -148,24 +143,14 @@ class MseServer:
             return
         return random.choice(self.slave_map[name])
 
-    def _slave_task_url(self, slave):
-        return 'http://{}/api/v{}/task'.format(slave, self.api_version)
-
     async def _get_real_url(self, result, name):
-        slave = self.slave_available(name)
+        slave = self._slave_available(name)
         if slave is None:
             return
         try:
-            url = self._slave_task_url(slave)
             real_url_req = HttpRequest(result['url'], allow_redirects=False)
-            body = pickle.dumps(real_url_req)
-            timeout = self.config.get('timeout')
-            req_headers = {'Content-Type': 'application/octet-stream'}
-            req = HTTPRequest(url, method='POST', headers=req_headers, body=body,
-                              connect_timeout=timeout, request_timeout=timeout)
-            resp = await self.http_client.fetch(req)
-            real_resp = pickle.loads(resp.body)
-            location = self._get_location(real_resp)
+            resp = await slave.fetch(real_url_req)
+            location = self._get_location(resp)
             if location is not None:
                 result['url'] = urljoin(result['url'], location)
         except Exception as e:
@@ -277,12 +262,17 @@ class SearchHandler(RequestHandler):
         self.write(packed_results)
 
 
-class TaskHanlder(RequestHandler):
+class FetchHanlder(RequestHandler):
     def initialize(self, server):
         self.config = server.config
         self.downloader = server.downloader
+        self.api_secret = self.config.get('api_secret')
 
     async def post(self):
+        if not self.verify_request():
+            self.send_error(403)
+            return
+
         req = pickle.loads(self.request.body)
         req.timeout = self.config.get('timeout')
         if req.headers is None:
@@ -297,7 +287,21 @@ class TaskHanlder(RequestHandler):
         except HttpError as e:
             resp = e.response
         except ClientError:
-            self.write_error(503)
+            self.send_error(503)
             return
         self.set_header('Content-Type', 'application/octet-stream')
         self.write(pickle.dumps(resp))
+
+    def verify_request(self):
+        t = int(time.time())
+        timestamp = self.get_argument('timestamp')
+        nonce = self.get_argument('nonce')
+        signature = self.get_argument('signature')
+
+        s = (self.api_secret + timestamp + nonce).encode('utf-8')
+        h = hashlib.sha256(self.request.body + s).hexdigest()
+        if h != signature:
+            return False
+        if abs(t - int(timestamp)) > 600:
+            return False
+        return True
