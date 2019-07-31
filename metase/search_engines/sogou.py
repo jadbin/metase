@@ -30,11 +30,38 @@ class Sogou(SearchEngine):
         return 'https://www.sogou.com/web?query={}'.format(quote(query))
 
     def page_requests(self, query, **kwargs):
+        """
+        tsn=1&sourceid=inttime_day
+        tsn=2&sourceid=inttime_week
+        tsn=3&sourceid=inttime_month
+        北京+site%3A*.gov.cn
+
+        """
         max_records = kwargs.get('data_source_results')
+        recent_days = kwargs.get('recent_days')
+        site = kwargs.get('site')
+
+        if site:
+            query =query+"+site%3A"+site
+        else:
+            query = query
+
+        if recent_days:
+            if recent_days == 1:
+                tsn, sourceid = 1, "inttime_day"
+            elif recent_days == 7:
+                tsn, sourceid = 2, "inttime_week"
+            elif recent_days == 30:
+                tsn, sourceid = 3, "inttime_month"
+            raw_url = 'https://www.sogou.com/web?query={}&tsn={}&sourceid={}'.format(query, tsn, sourceid)
+        else:
+            raw_url = 'https://www.sogou.com/web?query={}'.format(query)
+
         if max_records is None:
             max_records = self.page_size
         for page in range(0, max_records, self.page_size):
-            url = 'https://www.sogou.com/web?page={}&query={}'.format(page + 1, quote(query))
+            url = '{}&page={}'.format(raw_url, page + 1)
+            log.info("url: {}".format(url))
             headers = HttpHeaders()
             headers.add('Cookie', self.convert_to_cookie_header(self.cookies))
             yield HttpRequest(url, headers=headers)
