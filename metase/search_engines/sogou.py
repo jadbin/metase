@@ -3,7 +3,6 @@
 import logging
 from urllib.request import quote, urljoin
 import asyncio
-from asyncio import CancelledError
 from http.cookies import SimpleCookie
 
 from tornado.httpclient import HTTPRequest
@@ -60,6 +59,7 @@ class Sogou(SearchEngine):
             try:
                 resp = await self.http_client.fetch(HTTPRequest('https://www.sogou.com/'))
                 self.cookies.update(self.get_cookies_in_response_headers(resp.headers))
+            except Exception as e:
+                log.warning('Failed to update cookies: %s', e)
+            finally:
                 await asyncio.sleep(5 * 60)
-            except CancelledError:
-                break

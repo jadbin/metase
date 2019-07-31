@@ -35,18 +35,6 @@ class MseServer:
 
     def __init__(self, config):
         self.config = config
-
-    def on_start(self):
-        app = Application([
-            (r'/api/v1/search', SearchHandler, dict(config=self.config)),
-            (r'/api/v1/task', TaskHanlder, dict(config=self.config))
-        ])
-        app.listen(self.config.get('port'), self.config.get('host'))
-
-
-class SearchHandler(RequestHandler):
-    def initialize(self, config):
-        self.config = config
         self.http_client = CurlAsyncHTTPClient(max_clients=config.get('max_clients'), force_instance=True)
         self.search_engines = self._load_search_engines()
         slaves = config.get('slaves')
@@ -57,38 +45,26 @@ class SearchHandler(RequestHandler):
             }]
         self.slave_map = self._make_slave_map(slaves)
         self.api_version = self.config.get('api_version', 1)
+        self.downloader = Downloader(max_clients=config.get('max_clients'))
 
-    def _load_search_engines(self):
-        SearchEngine.http_client = self.http_client
-        SearchEngine.config = self.config
-        return load_search_engines()
+    def on_start(self):
+        app = Application([
+            (r'/api/v1/search', SearchHandler, dict(server=self)),
+            (r'/api/v1/task', TaskHanlder, dict(server=self))
+        ])
+        app.listen(self.config.get('port'), self.config.get('host'))
 
-    def _make_slave_map(self, slaves):
-        slave_map = defaultdict(list)
-        for s in slaves:
-            if s['allow'] == '*':
-                allows = [i for i in self.search_engines]
-            else:
-                allows = s['allow'].split(',')
-            for a in allows:
-                slave_map[a.strip()].append(s['address'])
-        return slave_map
-
-    async def get(self):
-        start_time = time.time()
-        query = self.get_argument('query')
-        sources = self.get_argument('sources', default=None)
+    async def meta_search(self, query, **kwargs):
+        sources = kwargs.get('sources')
         if sources is None:
             sources = [i for i in self.search_engines]
         else:
-            sources = sources.split(',')
-            for i in sources:
-                if i not in self.search_engines:
-                    self.write_error(400)
-                    return
-        data_source_results = self.get_argument('data_source_results', '20')
-        data_source_results = int(data_source_results)
+            sources = [i for i in sources.split(',') if i in self.search_engines]
+        data_source_results = kwargs.get('data_source_results')
+        if data_source_results is None:
+            data_source_results = 20
 
+        start_time = time.time()
         req = {}
         for s in sources:
             req[s] = [i for i in self.search_engines[s].page_requests(query, data_source_results=data_source_results)]
@@ -104,8 +80,11 @@ class SearchHandler(RequestHandler):
             res[i] = []
             for t in resp[i]:
                 if t is not None:
-                    for r in self.search_engines[i].extract_results(t):
-                        res[i].append(r)
+                    try:
+                        for r in self.search_engines[i].extract_results(t):
+                            res[i].append(r)
+                    except Exception as e:
+                        log.warning('Failed to extract results from %s: %s', self.search_engines[i].name, e)
             if len(res[i]) > data_source_results:
                 res[i] = res[i][:data_source_results]
 
@@ -126,7 +105,23 @@ class SearchHandler(RequestHandler):
             'duration': round(duration, 3)
         }
         packed_results = self._pack_results(query, res, request_meta=req_meta, response_meta=resp_meta)
-        self.write(packed_results)
+        return packed_results
+
+    def _load_search_engines(self):
+        SearchEngine.http_client = self.http_client
+        SearchEngine.config = self.config
+        return load_search_engines()
+
+    def _make_slave_map(self, slaves):
+        slave_map = defaultdict(list)
+        for s in slaves:
+            if s['allow'] == '*':
+                allows = [i for i in self.search_engines]
+            else:
+                allows = s['allow'].split(',')
+            for a in allows:
+                slave_map[a.strip()].append(s['address'])
+        return slave_map
 
     async def _get_response(self, request, name, result, index):
         slave = self.slave_available(name)
@@ -268,10 +263,24 @@ class SearchHandler(RequestHandler):
                 records[i]['relevance'] = imp * loc_score
 
 
+class SearchHandler(RequestHandler):
+    def initialize(self, server):
+        self.server = server
+
+    async def get(self):
+        query = self.get_argument('query')
+        sources = self.get_argument('sources', default=None)
+        data_source_results = self.get_argument('data_source_results', default=None)
+        if data_source_results is not None:
+            data_source_results = int(data_source_results)
+        packed_results = await self.server.meta_search(query, sources=sources, data_source_results=data_source_results)
+        self.write(packed_results)
+
+
 class TaskHanlder(RequestHandler):
-    def initialize(self, config):
-        self.config = config
-        self.downloader = Downloader(max_clients=config.get('max_clients'))
+    def initialize(self, server):
+        self.config = server.config
+        self.downloader = server.downloader
 
     async def post(self):
         req = pickle.loads(self.request.body)

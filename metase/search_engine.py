@@ -63,6 +63,16 @@ class SearchEngine:
     def convert_to_cookie_header(self, cookies: SimpleCookie):
         return '; '.join('{}={}'.format(k, v.value) for k, v in cookies.items())
 
+    def default_headers(self):
+        headers = HttpHeaders()
+        default_headers = self.config.get('default_headers')
+        if default_headers:
+            for k, v in default_headers.items():
+                headers.setdefault(k, v)
+        user_agent = self.config.get('user_agent')
+        headers.setdefault('User-Agent', user_agent)
+        return headers
+
 
 def load_search_engines():
     engines = {}
