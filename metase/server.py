@@ -39,6 +39,7 @@ class MseServer:
         self.http_client = CurlAsyncHTTPClient(max_clients=config.get('max_clients'), force_instance=True)
         self.search_engines = self._load_search_engines()
         slaves = config.get('slaves')
+        # 没有配置slave的情况下将自身设置为slave
         if not slaves:
             slaves = [{
                 'address': 'localhost:{}'.format(config['port']),
@@ -53,7 +54,10 @@ class MseServer:
             ('/api/v{}/search'.format(self.api_version), SearchHandler, dict(server=self)),
             ('/api/v{}/fetch'.format(self.api_version), FetchHanlder, dict(server=self))
         ])
-        app.listen(self.config.get('port'), self.config.get('host'))
+        host = self.config.get('host')
+        port = self.config.get('port')
+        app.listen(port, host)
+        log.info('meta search service is available on %s:%s', host, port)
 
     async def meta_search(self, query, **kwargs):
         sources = kwargs.get('sources')

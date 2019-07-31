@@ -55,6 +55,9 @@ class Sogou(SearchEngine):
                 yield {'title': title, 'text': text, 'url': url}
 
     async def update_cookies(self):
+        """
+        避免被BAN，定时通过主页刷新Cookie
+        """
         while True:
             try:
                 resp = await self.http_client.fetch(HTTPRequest('https://www.sogou.com/'))
