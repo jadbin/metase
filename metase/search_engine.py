@@ -36,7 +36,7 @@ class SearchEngine:
         构造检索请求
         :param query: 查询词
         :param kwargs: 配置参数
-            max_records: 检索结果数量
+            data_source_results: 检索结果数量
             recent_days: 最近的检索结果，1: 最近一天，7: 最近一周，30: 最近一月
             site: 限定网站，例如: *.gov.cn
         :return: 检索请求的列表

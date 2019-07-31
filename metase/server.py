@@ -68,11 +68,16 @@ class MseServer:
         data_source_results = kwargs.get('data_source_results')
         if data_source_results is None:
             data_source_results = 20
+        recent_days = kwargs.get('recent_days')
+        site = kwargs.get('site')
+        request_params = dict(data_source_results=data_source_results,
+                              recent_days=recent_days,
+                              site=site)
 
         start_time = time.time()
         req = {}
         for s in sources:
-            req[s] = [i for i in self.search_engines[s].page_requests(query, data_source_results=data_source_results)]
+            req[s] = [i for i in self.search_engines[s].page_requests(query, **request_params)]
         resp = {}
         req_list = []
         for i in req:
@@ -262,7 +267,15 @@ class SearchHandler(RequestHandler):
         data_source_results = self.get_argument('data_source_results', default=None)
         if data_source_results is not None:
             data_source_results = int(data_source_results)
-        packed_results = await self.server.meta_search(query, sources=sources, data_source_results=data_source_results)
+        recent_days = self.get_argument('recent_days', default=None)
+        if recent_days is not None:
+            recent_days = int(recent_days)
+        site = self.get_argument('site', default=None)
+        packed_results = await self.server.meta_search(query,
+                                                       sources=sources,
+                                                       data_source_results=data_source_results,
+                                                       recent_days=recent_days,
+                                                       site=site)
         self.write(packed_results)
 
 
