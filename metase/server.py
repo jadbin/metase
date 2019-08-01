@@ -77,7 +77,11 @@ class MseServer:
         start_time = time.time()
         req = {}
         for s in sources:
-            req[s] = [i for i in self.search_engines[s].page_requests(query, **request_params)]
+            req[s] = []
+            se = self.search_engines[s]
+            for r in se.page_requests(query, **request_params):
+                log.info('%s: %s', se.name, r.url)
+                req[s].append(r)
         resp = {}
         req_list = []
         for i in req:

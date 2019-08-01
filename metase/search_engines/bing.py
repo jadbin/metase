@@ -21,14 +21,12 @@ class Bing(SearchEngine):
         return 'https://www.bing.com/search?q={}'.format(quote(query))
 
     def page_requests(self, query, **kwargs):
-
-
         max_records = kwargs.get('data_source_results')
         recent_days = kwargs.get('recent_days')
         site = kwargs.get('site')
 
         if site:
-            site = site.replace('*.','') if site.startswith("*.") else site
+            site = site.replace('*.', '') if site.startswith("*.") else site
             query = quote(query) + "+" + quote("site:") + quote(site)
         else:
             query = quote(query)
@@ -50,7 +48,6 @@ class Bing(SearchEngine):
             max_records = self.page_size
         for num in range(0, max_records, self.page_size):
             url = '{}&first={}'.format(raw_url, num + 1)
-            log.info("Bing: {}".format(url))
             yield HttpRequest(url)
 
     def extract_results(self, response):

@@ -50,7 +50,6 @@ class Baidu(SearchEngine):
 
         for num in range(0, max_records, self.page_size):
             url = '{}&pn={}&rn={}'.format(raw_url, num, self.page_size)
-            log.info("Baidu: {}".format(url))
             yield HttpRequest(url)
 
     def extract_results(self, response):

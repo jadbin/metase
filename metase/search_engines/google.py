@@ -22,10 +22,9 @@ class Google(SearchEngine):
 
     def page_requests(self, query, **kwargs):
         """
-
-        Day: https://www.google.com/search?q=%E5%8C%97%E4%BA%AC&tbs=qdr:d
-        Week: https://www.google.com/search?q=%E5%8C%97%E4%BA%AC&tbs=qdr:w
-        Year: https://www.google.com/search?q=%E5%8C%97%E4%BA%AC&tbs=qdr:y
+        Day: tbs=qdr:d
+        Week: tbs=qdr:w
+        Year: tbs=qdr:y
         +site%3A*.gov.cn
         """
         max_records = kwargs.get('data_source_results')
@@ -54,7 +53,6 @@ class Google(SearchEngine):
             max_records = self.page_size
         for num in range(0, max_records, self.page_size):
             url = '{}&start={}'.format(raw_url, num + 1)
-            log.info("Google: {}".format(url))
             yield HttpRequest(url)
 
     def extract_results(self, response):
