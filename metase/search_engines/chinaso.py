@@ -32,9 +32,9 @@ class Chinaso(SearchEngine):
         max_records = kwargs.get('data_source_results')
         if max_records is None:
             max_records = self.page_size
-        for page in range(0, max_records, self.page_size):
+        for num in range(0, max_records, self.page_size):
             url = 'http://www.chinaso.com/search/pagesearch.htm?q={}&page={}&wd={}'.format(quote(query),
-                                                                                           page + 1,
+                                                                                           num / self.page_size + 1,
                                                                                            quote(query))
             headers = HttpHeaders()
             headers.add('Cookie', self.convert_to_cookie_header(self.cookies))

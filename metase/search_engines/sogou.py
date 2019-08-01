@@ -33,8 +33,8 @@ class Sogou(SearchEngine):
         max_records = kwargs.get('data_source_results')
         if max_records is None:
             max_records = self.page_size
-        for page in range(0, max_records, self.page_size):
-            url = 'https://www.sogou.com/web?page={}&query={}'.format(page + 1, quote(query))
+        for num in range(0, max_records, self.page_size):
+            url = 'https://www.sogou.com/web?page={}&query={}'.format(num / self.page_size + 1, quote(query))
             headers = HttpHeaders()
             headers.add('Cookie', self.convert_to_cookie_header(self.cookies))
             yield HttpRequest(url, headers=headers)

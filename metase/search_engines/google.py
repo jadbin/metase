@@ -24,8 +24,8 @@ class Google(SearchEngine):
         max_records = kwargs.get('data_source_results')
         if max_records is None:
             max_records = self.page_size
-        for page in range(0, max_records, self.page_size):
-            url = 'https://www.google.com.hk/search?q={}&start={}'.format(quote(query), page * self.page_size)
+        for num in range(0, max_records, self.page_size):
+            url = 'https://www.google.com.hk/search?q={}&start={}'.format(quote(query), num)
             yield HttpRequest(url)
 
     def extract_results(self, response):

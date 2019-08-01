@@ -25,8 +25,8 @@ class Yahoo(SearchEngine):
         max_records = kwargs.get('data_source_results')
         if max_records is None:
             max_records = self.page_size
-        for page in range(0, max_records, self.page_size):
-            url = 'https://hk.search.yahoo.com/search?p={}&b={}'.format(quote(query), page * self.page_size + 1)
+        for num in range(0, max_records, self.page_size):
+            url = 'https://hk.search.yahoo.com/search?p={}&b={}'.format(quote(query), num + 1)
             yield HttpRequest(url)
 
     yahoo_url_reg = re.compile(r'/RU=(.+?)/')

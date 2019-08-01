@@ -1,4 +1,4 @@
- # coding=utf-8
+# coding=utf-8
 
 import logging
 from urllib.request import quote
@@ -24,7 +24,6 @@ class Baidu(SearchEngine):
         return 'https://www.baidu.com/s?wd={}'.format(quote(query))
 
     def page_requests(self, query, **kwargs):
-
         max_records = kwargs.get('data_source_results')
         recent_days = kwargs.get('recent_days')
         site = kwargs.get('site')
@@ -32,7 +31,7 @@ class Baidu(SearchEngine):
             max_records = self.page_size
 
         if site:
-                query = query + " site:" + site
+            query = query + " site:" + site
 
         if recent_days:
             today = datetime.now()
@@ -42,13 +41,15 @@ class Baidu(SearchEngine):
                 start = today + timedelta(days=-7)
             elif recent_days == 30:
                 start = today + timedelta(days=-30)
+            else:
+                raise ValueError('recent_days: {}'.format(recent_days))
             start, end = int(time.mktime(start.timetuple())), int(time.mktime(today.timetuple()))
-            raw_url = 'http://www.baidu.com/s?wd={}&gpc=stf%3D{}%2C{}|stftype%3D1'.format(quote(query),start, end)
+            raw_url = 'http://www.baidu.com/s?wd={}&gpc=stf%3D{}%2C{}|stftype%3D1'.format(quote(query), start, end)
         else:
             raw_url = 'http://www.baidu.com/s?wd={}'.format(quote(query))
 
-        for page in range(0, max_records, self.page_size):
-            url = '{}&pn={}&rn={}'.format(raw_url, page, self.page_size)
+        for num in range(0, max_records, self.page_size):
+            url = '{}&pn={}&rn={}'.format(raw_url, num, self.page_size)
             yield HttpRequest(url)
 
     def extract_results(self, response):

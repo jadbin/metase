@@ -21,15 +21,12 @@ class So(SearchEngine):
         return 'https://www.so.com/s?q={}'.format(quote(query))
 
     def page_requests(self, query, **kwargs):
-
         max_records = kwargs.get('data_source_results')
         recent_days = kwargs.get('recent_days')
         site = kwargs.get('site')
 
         if site:
-            query =quote(query)+"+site%3A"+site
-        else:
-            query = quote(query)
+            query = query + " site:" + site
 
         if recent_days:
             if recent_days == 1:
@@ -38,15 +35,16 @@ class So(SearchEngine):
                 adv_t = 'w'
             elif recent_days == 30:
                 adv_t = 'm'
-            raw_url = 'https://www.so.com/s?q={}&adv_t={}'.format(query, adv_t)
+            else:
+                raise ValueError('recent_days: {}'.format(recent_days))
+            raw_url = 'https://www.so.com/s?q={}&adv_t={}'.format(quote(query), adv_t)
         else:
-            raw_url = 'https://www.so.com/s?q={}'.format(query)
-
+            raw_url = 'https://www.so.com/s?q={}'.format(quote(query))
 
         if max_records is None:
             max_records = self.page_size
-        for page in range(0, max_records, self.page_size):
-            url = '{}&pn={}'.format(raw_url, page + 1)
+        for num in range(0, max_records, self.page_size):
+            url = '{}&pn={}'.format(raw_url, num / self.page_size + 1)
             yield HttpRequest(url)
 
     def extract_results(self, response):

@@ -24,8 +24,8 @@ class Bing(SearchEngine):
         max_records = kwargs.get('data_source_results')
         if max_records is None:
             max_records = self.page_size
-        for page in range(0, max_records, self.page_size):
-            url = 'https://www.bing.com/search?q={}&first={}'.format(quote(query), page * self.page_size + 1)
+        for num in range(0, max_records, self.page_size):
+            url = 'https://www.bing.com/search?q={}&first={}'.format(quote(query), num + 1)
             yield HttpRequest(url)
 
     def extract_results(self, response):
