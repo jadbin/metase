@@ -27,7 +27,7 @@ class Ask(SearchEngine):
         if max_records is None:
             max_records = self.page_size
         for num in range(0, max_records, self.page_size):
-            url = 'https://www.search.ask.com/web?q={}&page={}'.format(quote(query), num / self.page_size + 1)
+            url = 'https://www.search.ask.com/web?q={}&page={}'.format(quote(query), num // self.page_size + 1)
             yield HttpRequest(url)
 
     def extract_results(self, response):

@@ -61,7 +61,7 @@ class Sogou(SearchEngine):
         if max_records is None:
             max_records = self.page_size
         for num in range(0, max_records, self.page_size):
-            url = '{}&page={}'.format(raw_url, num / self.page_size + 1)
+            url = '{}&page={}'.format(raw_url, num // self.page_size + 1)
             headers = HttpHeaders()
             headers.add('Cookie', self.convert_to_cookie_header(self.cookies))
             yield HttpRequest(url, headers=headers)
