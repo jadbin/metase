@@ -21,11 +21,40 @@ class Google(SearchEngine):
         return 'https://www.google.com.hk/search?q={}'.format(quote(query))
 
     def page_requests(self, query, **kwargs):
+        """
+
+        Day: https://www.google.com/search?q=%E5%8C%97%E4%BA%AC&tbs=qdr:d
+        Week: https://www.google.com/search?q=%E5%8C%97%E4%BA%AC&tbs=qdr:w
+        Year: https://www.google.com/search?q=%E5%8C%97%E4%BA%AC&tbs=qdr:y
+        +site%3A*.gov.cn
+        """
         max_records = kwargs.get('data_source_results')
+        recent_days = kwargs.get('recent_days')
+        site = kwargs.get('site')
+
+        if site:
+            query = quote(query) + "+" + quote("site:") + quote(site)
+        else:
+            query = quote(query)
+
+        if recent_days:
+            if recent_days == 1:
+                tbs = 'qdr:d'
+            elif recent_days == 7:
+                tbs = 'qdr:w'
+            elif recent_days == 30:
+                tbs = 'qdr:m'
+            else:
+                raise ValueError('recent_days: {}'.format(recent_days))
+            raw_url = 'https://www.google.com.hk/search?q={}&tbs={}'.format(query, tbs)
+        else:
+            raw_url = 'https://www.google.com.hk/search?q={}'.format(query)
+
         if max_records is None:
             max_records = self.page_size
         for num in range(0, max_records, self.page_size):
-            url = 'https://www.google.com.hk/search?q={}&start={}'.format(quote(query), num)
+            url = '{}&start={}'.format(raw_url, num + 1)
+            log.info("Google: {}".format(url))
             yield HttpRequest(url)
 
     def extract_results(self, response):

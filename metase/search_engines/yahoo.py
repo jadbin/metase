@@ -22,11 +22,38 @@ class Yahoo(SearchEngine):
         return 'https://hk.search.yahoo.com/search?p={}'.format(quote(query))
 
     def page_requests(self, query, **kwargs):
+        """
+        btf=d; btf=w; btf=m
+        https://hk.search.yahoo.com/search?p=%E5%8C%97%E4%BA%AC+site%3A*.gov.cn
+        """
         max_records = kwargs.get('data_source_results')
+        recent_days = kwargs.get('recent_days')
+        site = kwargs.get('site')
+
+        if site:
+            site = site.replace('*.','') if site.startswith("*.") else site
+            query = quote(query) + "+" + quote("site:") + quote(site)
+        else:
+            query = quote(query)
+
+        if recent_days:
+            if recent_days == 1:
+                btf = 'd'
+            elif recent_days == 7:
+                btf = 'w'
+            elif recent_days == 30:
+                btf = 'm'
+            else:
+                raise ValueError('recent_days: {}'.format(recent_days))
+            raw_url = 'https://hk.search.yahoo.com/search?q={}&btf={}'.format(query, btf)
+        else:
+            raw_url = 'https://hk.search.yahoo.com/search?q={}'.format(query)
+
         if max_records is None:
             max_records = self.page_size
         for num in range(0, max_records, self.page_size):
-            url = 'https://hk.search.yahoo.com/search?p={}&b={}'.format(quote(query), num + 1)
+            url = '{}&first={}'.format(raw_url, num + 1)
+            log.info("Yahoo: {}".format(url))
             yield HttpRequest(url)
 
     yahoo_url_reg = re.compile(r'/RU=(.+?)/')

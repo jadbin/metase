@@ -45,9 +45,11 @@ class So(SearchEngine):
             max_records = self.page_size
         for num in range(0, max_records, self.page_size):
             url = '{}&pn={}'.format(raw_url, num / self.page_size + 1)
+            log.info("SO: {}".format(url))
             yield HttpRequest(url)
 
     def extract_results(self, response):
+        
         selector = Selector(response.text)
         for item in selector.css('li.res-list'):
             title = item.css('h3>a')[0].text.strip()
