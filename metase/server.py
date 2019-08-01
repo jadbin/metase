@@ -265,6 +265,11 @@ class SearchHandler(RequestHandler):
     def initialize(self, server):
         self.server = server
 
+    def set_default_headers(self):
+        self.set_header('Access-Control-Allow-Origin', '*')
+        self.set_header('Access-Control-Allow-Headers', 'X-Requested-With')
+        self.set_header('Access-Control-Allow-Methods', 'POST, PUT, GET, DELETE, OPTIONS')
+
     async def get(self):
         query = self.get_argument('query')
         sources = self.get_argument('sources', default=None)
