@@ -17,9 +17,11 @@ from xpaw import Downloader, HttpRequest
 from xpaw.errors import HttpError, ClientError
 from xpaw.extensions import UserAgentMiddleware
 from xpaw.extension import ExtensionManager
+from xpaw.queue import FifoQueue
 
 from metase.search_engine import load_search_engines, SearchEngine
 from metase.slave import Slave
+from metase.gather import GatherTask
 
 log = logging.getLogger(__name__)
 
@@ -49,19 +51,36 @@ class MseServer:
                 'allow': '*'
             }]
         self.slave_map = self._make_slave_map(slaves)
+        self.workers = []
+        self.work_queue = FifoQueue()
 
     def on_start(self):
+        self._init_workers()
+
         apis = [
             ('/api/v{}/fetch'.format(self.api_version), FetchHanlder, dict(server=self))
         ]
         if not self.config.get('only_slave'):
             apis.append(('/api/v{}/search'.format(self.api_version), SearchHandler, dict(server=self)))
-
         app = Application(apis)
         host = self.config.get('host')
         port = self.config.get('port')
         app.listen(port, host)
         log.info('meta search service is available on %s:%s', host, port)
+
+    def _init_workers(self):
+        # 有可能获取结果的协程占用worker等待处理fake url，因此数量*2
+        for i in range(self.downloader.max_clients * 2):
+            f = asyncio.ensure_future(self._do_work())
+            self.workers.append(f)
+
+    async def _do_work(self):
+        while True:
+            req = await self.work_queue.pop()
+            try:
+                await req
+            except Exception:
+                log.warning('work failed', exc_info=True)
 
     async def meta_search(self, query, **kwargs):
         sources = kwargs.get('sources')
@@ -72,6 +91,10 @@ class MseServer:
         data_source_results = kwargs.get('data_source_results')
         if data_source_results is None:
             data_source_results = 20
+        if data_source_results < 10:
+            data_source_results = 10
+        if data_source_results > 500:
+            data_source_results = 500
         recent_days = kwargs.get('recent_days')
         site = kwargs.get('site')
         request_params = dict(data_source_results=data_source_results,
@@ -84,31 +107,24 @@ class MseServer:
             req[s] = []
             se = self.search_engines[s]
             for r in se.page_requests(query, **request_params):
-                log.info('%s: %s', se.name, r.url)
                 req[s].append(r)
-        resp = {}
-        req_list = []
-        for i in req:
-            resp[i] = [None] * len(req[i])
-            for j in range(len(req[i])):
-                req_list.append(self._get_response(req[i][j], i, resp[i], j))
-        await asyncio.gather(*req_list)
-        res = {}
-        for i in resp:
-            res[i] = []
-            for t in resp[i]:
-                if t is not None:
-                    for r in t['data']:
-                        res[i].append(r)
-            if len(res[i]) > data_source_results:
-                res[i] = res[i][:data_source_results]
 
-        fake_url_req_list = []
-        for i in res:
-            if self.search_engines[i].fake_url:
-                for r in res[i]:
-                    fake_url_req_list.append(self._get_real_url(r, i))
-        await asyncio.gather(*fake_url_req_list)
+        req_index = [i for i in req.keys()]
+        task = GatherTask(len(req_index))
+        for i in range(len(req_index)):
+            asyncio.ensure_future(self._process_req_list(req[req_index[i]], req_index[i], task, i))
+        await task.done(timeout=self.config.get('timeout'))
+
+        res = {}
+        for i in range(len(req_index)):
+            k = req_index[i]
+            res[k] = []
+            resp = task.result[i]
+            if resp and resp is not GatherTask.NO_RESULT:
+                for r in resp:
+                    res[k].append(r)
+            if len(res[k]) > data_source_results:
+                res[k] = res[k][:data_source_results]
 
         duration = time.time() - start_time
         req_meta = {
@@ -140,15 +156,45 @@ class MseServer:
                 slave_map[a.strip()].append(slave)
         return slave_map
 
-    async def _get_response(self, request, name, result, index):
-        slave = self._slave_available(name)
-        if slave is None:
-            return
-        try:
-            resp = await slave.fetch(name, request)
-            result[index] = resp
-        except Exception as e:
-            log.warning('Failed request %s on slave %s: %s', request.url, slave, e)
+    async def _process_req_list(self, req_list, name, task, index):
+        if len(req_list) <= 0:
+            task.set_result(index, [])
+        t = GatherTask(len(req_list))
+        for i in range(len(req_list)):
+            await self.work_queue.push(self._get_response(req_list[i], name, t, i))
+        await t.done(timeout=self.config.get('timeout'))
+
+        res = []
+        for rlist in t.result:
+            if rlist and rlist is not GatherTask.NO_RESULT:
+                for r in rlist:
+                    res.append(r)
+        task.set_result(index, res)
+
+    async def _get_response(self, request, name, task, index):
+        async def _fetch():
+            slave = self._slave_available(name)
+            if slave is None:
+                return
+            try:
+                resp = await slave.fetch(name, request)
+            except Exception as e:
+                log.warning('Failed request %s on slave %s: %s', request.url, slave, e)
+                return
+            else:
+                res = resp['data']
+                if len(res) == 0:
+                    return
+                if self.search_engines[name].fake_url:
+                    task.update_result(index, res)
+                    t = GatherTask(len(res))
+                    for i in range(len(res)):
+                        await self.work_queue.push(self._get_real_url(res[i], name, t, i))
+                    await t.done(timeout=self.config.get('timeout'))
+                return res
+
+        result = await _fetch()
+        task.set_result(index, result)
 
     def _slave_available(self, name):
         """
@@ -158,18 +204,22 @@ class MseServer:
             return
         return random.choice(self.slave_map[name])
 
-    async def _get_real_url(self, result, name):
-        slave = self._slave_available(name)
-        if slave is None:
-            return
-        try:
-            real_url_req = HttpRequest(result['url'], allow_redirects=False)
-            resp = await slave.fetch('fake_url', real_url_req)
-            location = resp['data']
-            if location is not None:
-                result['url'] = urljoin(result['url'], location)
-        except Exception as e:
-            log.warning('Failed to get real location %s: %s', result['url'], e)
+    async def _get_real_url(self, result, name, task, index):
+        async def _get():
+            slave = self._slave_available(name)
+            if slave is None:
+                return
+            try:
+                real_url_req = HttpRequest(result['url'], allow_redirects=False)
+                resp = await slave.fetch('fake_url', real_url_req)
+                location = resp['data']
+                if location is not None:
+                    result['url'] = urljoin(result['url'], location)
+            except Exception as e:
+                log.warning('Failed to get real location %s: %s', result['url'], e)
+
+        await _get()
+        task.set_result(index)
 
     def _pack_results(self, query, results, request_meta=None, response_meta=None):
         """
