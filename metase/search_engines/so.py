@@ -2,10 +2,12 @@
 
 import logging
 from urllib.request import quote
+import asyncio
+from http.cookies import SimpleCookie
 
 from metase.search_engine import SearchEngine
-
-from xpaw import Selector, HttpRequest
+from tornado.httpclient import HTTPRequest
+from xpaw import Selector, HttpRequest, HttpHeaders
 
 log = logging.getLogger(__name__)
 
@@ -16,6 +18,10 @@ class So(SearchEngine):
     source_importance = 1
 
     page_size = 10
+
+    def __init__(self):
+        self.cookies = SimpleCookie()
+        asyncio.ensure_future(self.update_cookies())
 
     def search_url(self, query):
         return 'https://www.so.com/s?q={}'.format(quote(query))
@@ -45,6 +51,8 @@ class So(SearchEngine):
             max_records = self.page_size
         for num in range(0, max_records, self.page_size):
             url = '{}&pn={}'.format(raw_url, num // self.page_size + 1)
+            headers = HttpHeaders()
+            headers.add('Cookie', self.convert_to_cookie_header(self.cookies))
             yield HttpRequest(url)
 
     def extract_results(self, response):
@@ -61,3 +69,16 @@ class So(SearchEngine):
                 url = h3_a.attr('href').strip()
             if text is not None:
                 yield {'title': title, 'text': text, 'url': url}
+
+    async def update_cookies(self):
+        """
+        避免被BAN，定时通过主页刷新Cookie
+        """
+        while True:
+            try:
+                resp = await self.http_client.fetch(HTTPRequest('https://www.so.com/'))
+                self.cookies.update(self.get_cookies_in_response_headers(resp.headers))
+            except Exception as e:
+                log.warning('Failed to update cookies: %s', e)
+            finally:
+                await asyncio.sleep(5 * 60)
