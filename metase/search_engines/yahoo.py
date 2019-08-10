@@ -52,7 +52,7 @@ class Yahoo(SearchEngine):
         if max_records is None:
             max_records = self.page_size
         for num in range(0, max_records, self.page_size):
-            url = '{}&first={}'.format(raw_url, num + 1)
+            url = '{}&b={}'.format(raw_url, num + 1)
             yield HttpRequest(url)
 
     yahoo_url_reg = re.compile(r'/RU=(.+?)/')
