@@ -105,6 +105,20 @@ class RunCommand(Command):
         run_server(self.config)
 
 
+class RunSlaveCommand(RunCommand):
+    @property
+    def name(self):
+        return "run-slave"
+
+    @property
+    def short_desc(self):
+        return "Run a slave of meta search service"
+
+    def run(self, args):
+        self.config['only_slave'] = True
+        super().run(args)
+
+
 class VersionCommand(Command):
     @property
     def name(self):

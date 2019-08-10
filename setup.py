@@ -26,7 +26,7 @@ class PyTest(TestCommand):
 
 install_requires = [
     'tornado>=6.0.3',
-    'xpaw>=0.11.1'
+    'xpaw>=0.12.0'
 ]
 
 with open(join(dirname(__file__), 'requirements/test.txt'), 'r', encoding='utf-8') as f:

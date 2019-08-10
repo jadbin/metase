@@ -6,9 +6,7 @@ import asyncio
 from http.cookies import SimpleCookie
 
 from tornado.httpclient import HTTPRequest
-
 from metase.search_engine import SearchEngine
-
 from xpaw import Selector, HttpRequest, HttpHeaders
 
 log = logging.getLogger(__name__)

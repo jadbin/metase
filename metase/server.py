@@ -50,10 +50,13 @@ class MseServer:
         self.downloader = Downloader(max_clients=config.get('max_clients'))
 
     def on_start(self):
-        app = Application([
-            ('/api/v{}/search'.format(self.api_version), SearchHandler, dict(server=self)),
+        apis = [
             ('/api/v{}/fetch'.format(self.api_version), FetchHanlder, dict(server=self))
-        ])
+        ]
+        if not self.config.get('only_slave'):
+            apis.append(('/api/v{}/search'.format(self.api_version), SearchHandler, dict(server=self)))
+
+        app = Application(apis)
         host = self.config.get('host')
         port = self.config.get('port')
         app.listen(port, host)
@@ -203,7 +206,6 @@ class MseServer:
             response_meta['sources'][s] = {
                 'records': records,
                 'url': self.search_engines[s].search_url(query),
-                'ban': False  # FIXME
             }
 
         res = {
@@ -286,6 +288,7 @@ class SearchHandler(RequestHandler):
                                                        recent_days=recent_days,
                                                        site=site)
         self.write(packed_results)
+        self.finish()
 
 
 class FetchHanlder(RequestHandler):
@@ -317,6 +320,7 @@ class FetchHanlder(RequestHandler):
             return
         self.set_header('Content-Type', 'application/octet-stream')
         self.write(pickle.dumps(resp))
+        self.finish()
 
     def verify_request(self):
         t = int(time.time())
