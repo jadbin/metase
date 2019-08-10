@@ -14,7 +14,7 @@ import hashlib
 from tornado.web import Application, RequestHandler
 from tornado.curl_httpclient import CurlAsyncHTTPClient
 
-from xpaw import Downloader, HttpRequest
+from xpaw import Downloader, HttpRequest, HttpHeaders
 from xpaw.errors import HttpError, ClientError
 
 from metase.search_engine import load_search_engines, SearchEngine
@@ -306,7 +306,10 @@ class FetchHanlder(RequestHandler):
         req = pickle.loads(self.request.body)
         req.timeout = self.config.get('timeout')
         if req.headers is None:
-            req.headers = get_default_headers()
+            req.headers = HttpHeaders()
+        default_headers = get_default_headers()
+        for k, v in default_headers.items():
+            req.headers.setdefault(k, v)
         try:
             resp = await self.downloader.fetch(req)
         except HttpError as e:

@@ -99,6 +99,6 @@ def walk_modules(path):
 def get_default_headers():
     ua = UserAgentMiddleware()
     user_agent = ua._make_user_agent(':desktop')
-    headers = ua.BROWSER_DEFAULT_HEADERS
+    headers = dict(ua.BROWSER_DEFAULT_HEADERS['chrome'])
     headers['User-Agent'] = user_agent
     return headers
