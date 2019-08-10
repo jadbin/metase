@@ -14,11 +14,12 @@ import hashlib
 from tornado.web import Application, RequestHandler
 from tornado.curl_httpclient import CurlAsyncHTTPClient
 
-from xpaw import Downloader, HttpRequest, HttpHeaders
+from xpaw import Downloader, HttpRequest
 from xpaw.errors import HttpError, ClientError
 
 from metase.search_engine import load_search_engines, SearchEngine
 from metase.slave import Slave
+from metase.utils import get_default_headers
 
 log = logging.getLogger(__name__)
 
@@ -149,7 +150,7 @@ class MseServer:
             resp = await slave.fetch(request)
             result[index] = resp
         except Exception as e:
-            log.warning('Failed request slave %s: %s', slave, e)
+            log.warning('Failed request %s on slave %s: %s', request.url, slave, e)
 
     def _slave_available(self, name):
         """
@@ -305,17 +306,14 @@ class FetchHanlder(RequestHandler):
         req = pickle.loads(self.request.body)
         req.timeout = self.config.get('timeout')
         if req.headers is None:
-            req.headers = HttpHeaders()
-        default_headers = self.config.get('default_headers')
-        for k, v in default_headers.items():
-            req.headers.setdefault(k, v)
-        user_agent = self.config.get('user_agent')
-        req.headers.setdefault('User-Agent', user_agent)
+            req.headers = get_default_headers()
         try:
             resp = await self.downloader.fetch(req)
         except HttpError as e:
             resp = e.response
-        except ClientError:
+            log.info('Http Error: %s, %s', resp.status, req.url)
+        except ClientError as e:
+            log.warning('Failed to request %s: %s', req.url, e)
             self.send_error(503)
             return
         self.set_header('Content-Type', 'application/octet-stream')

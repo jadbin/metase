@@ -31,7 +31,7 @@ class Yahoo(SearchEngine):
         site = kwargs.get('site')
 
         if site:
-            site = site.replace('*.','') if site.startswith("*.") else site
+            site = site.replace('*.', '') if site.startswith("*.") else site
             query = quote(query) + "+" + quote("site:") + quote(site)
         else:
             query = quote(query)
@@ -53,7 +53,6 @@ class Yahoo(SearchEngine):
             max_records = self.page_size
         for num in range(0, max_records, self.page_size):
             url = '{}&first={}'.format(raw_url, num + 1)
-            log.info("Yahoo: {}".format(url))
             yield HttpRequest(url)
 
     yahoo_url_reg = re.compile(r'/RU=(.+?)/')

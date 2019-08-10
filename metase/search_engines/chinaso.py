@@ -62,9 +62,9 @@ class Chinaso(SearchEngine):
         while True:
             try:
                 url = 'http://www.chinaso.com/search/pagesearch.htm?q={}'.format(quote('中国搜索'))
-                headers = self.default_headers()
                 try:
-                    resp = await self.http_client.fetch(HTTPRequest(url, headers=headers, follow_redirects=False))
+                    resp = await self.http_client.fetch(
+                        HTTPRequest(url, headers=self.default_headers, follow_redirects=False))
                 except HTTPError as e:
                     resp = e.response
                 cookies = self.get_cookies_in_response_headers(resp.headers)

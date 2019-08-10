@@ -6,6 +6,8 @@ import logging
 from importlib import import_module
 from pkgutil import iter_modules
 
+from xpaw.extensions import UserAgentMiddleware
+
 
 def load_object(path):
     if isinstance(path, str):
@@ -92,3 +94,11 @@ def walk_modules(path):
                 submod = import_module(fullpath)
                 mods.append(submod)
     return mods
+
+
+def get_default_headers():
+    ua = UserAgentMiddleware()
+    user_agent = ua._make_user_agent(':desktop')
+    headers = ua.BROWSER_DEFAULT_HEADERS
+    headers['User-Agent'] = user_agent
+    return headers

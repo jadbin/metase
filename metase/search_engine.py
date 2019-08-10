@@ -5,7 +5,7 @@ from http.cookies import SimpleCookie
 
 from xpaw import HttpHeaders, HttpResponse
 
-from metase.utils import walk_modules
+from metase.utils import walk_modules, get_default_headers
 
 
 class SearchEngine:
@@ -63,15 +63,11 @@ class SearchEngine:
     def convert_to_cookie_header(self, cookies: SimpleCookie):
         return '; '.join('{}={}'.format(k, v.value) for k, v in cookies.items())
 
+    @property
     def default_headers(self):
-        headers = HttpHeaders()
-        default_headers = self.config.get('default_headers')
-        if default_headers:
-            for k, v in default_headers.items():
-                headers.setdefault(k, v)
-        user_agent = self.config.get('user_agent')
-        headers.setdefault('User-Agent', user_agent)
-        return headers
+        if not hasattr(self, '_default_headers'):
+            self._default_headers = get_default_headers()
+        return self._default_headers
 
 
 def load_search_engines():
