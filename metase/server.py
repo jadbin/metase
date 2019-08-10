@@ -310,15 +310,18 @@ class FetchHanlder(RequestHandler):
         default_headers = get_default_headers()
         for k, v in default_headers.items():
             req.headers.setdefault(k, v)
+        log.info('Request: %s', req.url)
         try:
             resp = await self.downloader.fetch(req)
         except HttpError as e:
             resp = e.response
-            log.info('Http Error: %s, %s', resp.status, req.url)
+            log.info('Http Error: %s, %s', resp.status, resp.url)
         except ClientError as e:
             log.warning('Failed to request %s: %s', req.url, e)
             self.send_error(503)
             return
+        else:
+            log.info('Response: %s', resp.url)
         self.set_header('Content-Type', 'application/octet-stream')
         self.write(pickle.dumps(resp))
         self.finish()
