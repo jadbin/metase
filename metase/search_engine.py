@@ -5,7 +5,7 @@ from http.cookies import SimpleCookie
 
 from xpaw import HttpHeaders, HttpResponse
 
-from metase.utils import walk_modules, get_default_headers
+from metase.utils import walk_modules
 
 
 class SearchEngine:
@@ -17,7 +17,8 @@ class SearchEngine:
     source_importance: 搜索源的相对权重，1: 一般，2: 重要，3: 非常重要
 
     加载引擎前注入如下属性：
-    http_client: HTTP客户端
+    downloader: HTTP客户端
+    extension: 拓展
     config: 配置
     """
 
@@ -25,7 +26,8 @@ class SearchEngine:
     fake_url = False
     source_importance = 1
 
-    http_client = None
+    downloader = None
+    extension = None
     config = None
 
     def search_url(self, query):
@@ -62,12 +64,6 @@ class SearchEngine:
 
     def convert_to_cookie_header(self, cookies: SimpleCookie):
         return '; '.join('{}={}'.format(k, v.value) for k, v in cookies.items())
-
-    @property
-    def default_headers(self):
-        if not hasattr(self, '_default_headers'):
-            self._default_headers = get_default_headers()
-        return self._default_headers
 
 
 def load_search_engines():

@@ -6,7 +6,6 @@ import asyncio
 from http.cookies import SimpleCookie
 
 from metase.search_engine import SearchEngine
-from tornado.httpclient import HTTPRequest
 from xpaw import Selector, HttpRequest, HttpHeaders
 
 log = logging.getLogger(__name__)
@@ -56,6 +55,9 @@ class So(SearchEngine):
             yield HttpRequest(url)
 
     def extract_results(self, response):
+        # 更新Cookie
+        self.cookies.update(self.get_cookies_in_response_headers(response.headers))
+
         selector = Selector(response.text)
         for item in selector.css('li.res-list'):
             title = item.css('h3>a')[0].text.strip()
@@ -76,7 +78,9 @@ class So(SearchEngine):
         """
         while True:
             try:
-                resp = await self.http_client.fetch(HTTPRequest('https://www.so.com/'))
+                req = HttpRequest('https://www.so.com/')
+                await self.extension.handle_request(req)
+                resp = await self.downloader.fetch(req)
                 self.cookies.update(self.get_cookies_in_response_headers(resp.headers))
             except Exception as e:
                 log.warning('Failed to update cookies: %s', e)

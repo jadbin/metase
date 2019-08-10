@@ -5,9 +5,8 @@ from urllib.request import quote, urljoin
 import asyncio
 from http.cookies import SimpleCookie
 
-from tornado.httpclient import HTTPRequest, HTTPError
-
 from xpaw import Selector, HttpRequest, HttpHeaders
+from xpaw.errors import HttpError
 
 from metase.search_engine import SearchEngine
 
@@ -63,9 +62,10 @@ class Chinaso(SearchEngine):
             try:
                 url = 'http://www.chinaso.com/search/pagesearch.htm?q={}'.format(quote('中国搜索'))
                 try:
-                    resp = await self.http_client.fetch(
-                        HTTPRequest(url, headers=self.default_headers, follow_redirects=False))
-                except HTTPError as e:
+                    req = HttpRequest(url, allow_redirects=False)
+                    await self.extension.handle_request(req)
+                    resp = await self.downloader.fetch(req)
+                except HttpError as e:
                     resp = e.response
                 cookies = self.get_cookies_in_response_headers(resp.headers)
                 self.cookies.update(cookies)

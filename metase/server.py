@@ -12,14 +12,14 @@ import time
 import hashlib
 
 from tornado.web import Application, RequestHandler
-from tornado.curl_httpclient import CurlAsyncHTTPClient
 
-from xpaw import Downloader, HttpRequest, HttpHeaders
+from xpaw import Downloader, HttpRequest
 from xpaw.errors import HttpError, ClientError
+from xpaw.extensions import UserAgentMiddleware
+from xpaw.extension import ExtensionManager
 
 from metase.search_engine import load_search_engines, SearchEngine
 from metase.slave import Slave
-from metase.utils import get_default_headers
 
 log = logging.getLogger(__name__)
 
@@ -37,7 +37,9 @@ class MseServer:
 
     def __init__(self, config):
         self.config = config
-        self.http_client = CurlAsyncHTTPClient(max_clients=config.get('max_clients'), force_instance=True)
+        self.api_version = self.config.get('api_version')
+        self.downloader = Downloader(max_clients=config.get('max_clients'))
+        self.extension = ExtensionManager(UserAgentMiddleware(user_agent=':desktop'))
         self.search_engines = self._load_search_engines()
         slaves = config.get('slaves')
         # 没有配置slave的情况下将自身设置为slave
@@ -47,8 +49,6 @@ class MseServer:
                 'allow': '*'
             }]
         self.slave_map = self._make_slave_map(slaves)
-        self.api_version = self.config.get('api_version')
-        self.downloader = Downloader(max_clients=config.get('max_clients'))
 
     def on_start(self):
         apis = [
@@ -98,11 +98,8 @@ class MseServer:
             res[i] = []
             for t in resp[i]:
                 if t is not None:
-                    try:
-                        for r in self.search_engines[i].extract_results(t):
-                            res[i].append(r)
-                    except Exception as e:
-                        log.warning('Failed to extract results from %s: %s', self.search_engines[i].name, e)
+                    for r in t['data']:
+                        res[i].append(r)
             if len(res[i]) > data_source_results:
                 res[i] = res[i][:data_source_results]
 
@@ -126,7 +123,8 @@ class MseServer:
         return packed_results
 
     def _load_search_engines(self):
-        SearchEngine.http_client = self.http_client
+        SearchEngine.downloader = self.downloader
+        SearchEngine.extension = self.extension
         SearchEngine.config = self.config
         return load_search_engines()
 
@@ -147,7 +145,7 @@ class MseServer:
         if slave is None:
             return
         try:
-            resp = await slave.fetch(request)
+            resp = await slave.fetch(name, request)
             result[index] = resp
         except Exception as e:
             log.warning('Failed request %s on slave %s: %s', request.url, slave, e)
@@ -166,21 +164,12 @@ class MseServer:
             return
         try:
             real_url_req = HttpRequest(result['url'], allow_redirects=False)
-            resp = await slave.fetch(real_url_req)
-            location = self._get_location(resp)
+            resp = await slave.fetch('fake_url', real_url_req)
+            location = resp['data']
             if location is not None:
                 result['url'] = urljoin(result['url'], location)
         except Exception as e:
             log.warning('Failed to get real location %s: %s', result['url'], e)
-
-    location_reg = re.compile(r'location\.(?:replace\(|href=)[\'"](.+?)[\'"]')
-
-    def _get_location(self, resp):
-        if int(resp.status / 100) == 3:
-            return resp.headers['Location']
-        res = self.location_reg.search(resp.text)
-        if res:
-            return res.group(1)
 
     def _pack_results(self, query, results, request_meta=None, response_meta=None):
         """
@@ -296,6 +285,8 @@ class FetchHanlder(RequestHandler):
     def initialize(self, server):
         self.config = server.config
         self.downloader = server.downloader
+        self.extension = server.extension
+        self.search_engines = server.search_engines
         self.api_secret = self.config.get('api_secret')
 
     async def post(self):
@@ -303,13 +294,10 @@ class FetchHanlder(RequestHandler):
             self.send_error(403)
             return
 
+        name = self.get_argument('name')
         req = pickle.loads(self.request.body)
         req.timeout = self.config.get('timeout')
-        if req.headers is None:
-            req.headers = HttpHeaders()
-        default_headers = get_default_headers()
-        for k, v in default_headers.items():
-            req.headers.setdefault(k, v)
+        await self.extension.handle_request(req)
         log.info('Request: %s', req.url)
         try:
             resp = await self.downloader.fetch(req)
@@ -322,20 +310,40 @@ class FetchHanlder(RequestHandler):
             return
         else:
             log.info('Response: %s', resp.url)
-        self.set_header('Content-Type', 'application/octet-stream')
-        self.write(pickle.dumps(resp))
+
+        if name == 'fake_url':
+            result = self._get_location(resp)
+        else:
+            result = []
+            try:
+                for r in self.search_engines[name].extract_results(resp):
+                    result.append(r)
+            except Exception as e:
+                log.warning('Failed to extract results from %s: %s', name, e)
+
+        self.write({'data': result})
         self.finish()
 
     def verify_request(self):
         t = int(time.time())
+        name = self.get_argument('name')
         timestamp = self.get_argument('timestamp')
         nonce = self.get_argument('nonce')
         signature = self.get_argument('signature')
 
-        s = (self.api_secret + timestamp + nonce).encode('utf-8')
+        s = (self.api_secret + name + timestamp + nonce).encode('utf-8')
         h = hashlib.sha256(self.request.body + s).hexdigest()
         if h != signature:
             return False
         if abs(t - int(timestamp)) > 600:
             return False
         return True
+
+    location_reg = re.compile(r'location\.(?:replace\(|href=)[\'"](.+?)[\'"]')
+
+    def _get_location(self, resp):
+        if int(resp.status / 100) == 3:
+            return resp.headers['Location']
+        res = self.location_reg.search(resp.text)
+        if res:
+            return res.group(1)

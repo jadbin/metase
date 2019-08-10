@@ -5,7 +5,6 @@ from urllib.request import quote, urljoin
 import asyncio
 from http.cookies import SimpleCookie
 
-from tornado.httpclient import HTTPRequest
 from metase.search_engine import SearchEngine
 from xpaw import Selector, HttpRequest, HttpHeaders
 
@@ -85,7 +84,9 @@ class Sogou(SearchEngine):
         """
         while True:
             try:
-                resp = await self.http_client.fetch(HTTPRequest('https://www.sogou.com/'))
+                req = HttpRequest('https://www.sogou.com/')
+                await self.extension.handle_request(req)
+                resp = await self.downloader.fetch(req)
                 self.cookies.update(self.get_cookies_in_response_headers(resp.headers))
             except Exception as e:
                 log.warning('Failed to update cookies: %s', e)
