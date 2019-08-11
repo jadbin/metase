@@ -10,6 +10,7 @@ from urllib.request import urljoin
 import math
 import time
 import hashlib
+import inspect
 
 from tornado.web import Application, RequestHandler
 
@@ -177,7 +178,7 @@ class MseServer:
             if slave is None:
                 return
             try:
-                resp = await slave.fetch(name, request)
+                resp = await slave.fetch(request, name)
             except Exception as e:
                 log.warning('Failed request %s on slave %s: %s', request.url, slave, e)
                 return
@@ -211,7 +212,7 @@ class MseServer:
                 return
             try:
                 real_url_req = HttpRequest(result['url'], allow_redirects=False)
-                resp = await slave.fetch('fake_url', real_url_req)
+                resp = await slave.fetch_url(real_url_req, name)
                 location = resp['data']
                 if location is not None:
                     result['url'] = urljoin(result['url'], location)
@@ -345,10 +346,10 @@ class FetchHanlder(RequestHandler):
             return
 
         name = self.get_argument('name')
+        rtype = self.get_argument('rtype')
         req = pickle.loads(self.request.body)
-        req.timeout = self.config.get('timeout')
-        await self.extension.handle_request(req)
-        log.info('Request: %s', req.url)
+        await self._before_request(req, name)
+        log.info('request: %s', req.url)
         try:
             resp = await self.downloader.fetch(req)
         except HttpError as e:
@@ -359,29 +360,46 @@ class FetchHanlder(RequestHandler):
             self.send_error(503)
             return
         else:
-            log.info('Response: %s', resp.url)
+            log.info('response: %s', resp.url)
+            await self._after_request(resp, name)
 
-        if name == 'fake_url':
+        if rtype == 'url':
             result = self._get_location(resp)
-        else:
+        elif rtype == 'page':
             result = []
             try:
                 for r in self.search_engines[name].extract_results(resp):
                     result.append(r)
             except Exception as e:
                 log.warning('Failed to extract results from %s: %s', name, e)
+        else:
+            self.send_error(400)
+            return
 
         self.write({'data': result})
         self.finish()
 
+    async def _before_request(self, req, name):
+        req.timeout = self.config.get('timeout')
+        await self.extension.handle_request(req)
+        r = self.search_engines[name].before_request(req)
+        if inspect.iscoroutine(r):
+            await r
+
+    async def _after_request(self, resp, name):
+        r = self.search_engines[name].after_request(resp)
+        if inspect.iscoroutine(r):
+            await r
+
     def verify_request(self):
         t = int(time.time())
         name = self.get_argument('name')
+        rtype = self.get_argument('rtype')
         timestamp = self.get_argument('timestamp')
         nonce = self.get_argument('nonce')
         signature = self.get_argument('signature')
 
-        s = (self.api_secret + name + timestamp + nonce).encode('utf-8')
+        s = (self.api_secret + name + rtype + timestamp + nonce).encode('utf-8')
         h = hashlib.sha256(self.request.body + s).hexdigest()
         if h != signature:
             return False

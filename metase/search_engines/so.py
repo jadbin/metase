@@ -6,7 +6,7 @@ import asyncio
 from http.cookies import SimpleCookie
 
 from metase.search_engine import SearchEngine
-from xpaw import Selector, HttpRequest, HttpHeaders
+from xpaw import Selector, HttpRequest
 
 log = logging.getLogger(__name__)
 
@@ -50,14 +50,15 @@ class So(SearchEngine):
             max_records = self.page_size
         for num in range(0, max_records, self.page_size):
             url = '{}&pn={}'.format(raw_url, num // self.page_size + 1)
-            headers = HttpHeaders()
-            headers.add('Cookie', self.convert_to_cookie_header(self.cookies))
             yield HttpRequest(url)
 
-    def extract_results(self, response):
-        # 更新Cookie
-        self.cookies.update(self.get_cookies_in_response_headers(response.headers))
+    def before_request(self, request):
+        self.set_cookie_header(request, self.cookies)
 
+    def after_request(self, response):
+        self.cookies.update(self.get_cookies_in_response(response))
+
+    def extract_results(self, response):
         selector = Selector(response.text)
         for item in selector.css('li.res-list'):
             title = item.css('h3>a')[0].text.strip()
@@ -65,6 +66,10 @@ class So(SearchEngine):
             res_desc = item.css('p.res-desc')
             if len(res_desc) > 0:
                 text = res_desc[0].text.strip()
+            else:
+                res_rich = item.css('div.res-rich')
+                if len(res_rich) > 0:
+                    text = res_rich[0].text.strip()
             h3_a = item.css('h3>a')[0]
             url = h3_a.attr('data-url')
             if not url:
@@ -81,7 +86,7 @@ class So(SearchEngine):
                 req = HttpRequest('https://www.so.com/')
                 await self.extension.handle_request(req)
                 resp = await self.downloader.fetch(req)
-                self.cookies.update(self.get_cookies_in_response_headers(resp.headers))
+                self.cookies.update(self.get_cookies_in_response(resp))
             except Exception as e:
                 log.warning('Failed to update cookies: %s', e)
             finally:

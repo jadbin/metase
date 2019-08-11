@@ -6,7 +6,7 @@ import asyncio
 from http.cookies import SimpleCookie
 
 from metase.search_engine import SearchEngine
-from xpaw import Selector, HttpRequest, HttpHeaders
+from xpaw import Selector, HttpRequest
 
 log = logging.getLogger(__name__)
 
@@ -59,14 +59,15 @@ class Sogou(SearchEngine):
             max_records = self.page_size
         for num in range(0, max_records, self.page_size):
             url = '{}&page={}'.format(raw_url, num // self.page_size + 1)
-            headers = HttpHeaders()
-            headers.add('Cookie', self.convert_to_cookie_header(self.cookies))
-            yield HttpRequest(url, headers=headers)
+            yield HttpRequest(url)
+
+    def before_request(self, request):
+        self.set_cookie_header(request, self.cookies)
+
+    def after_request(self, response):
+        self.cookies.update(self.get_cookies_in_response(response))
 
     def extract_results(self, response):
-        # 更新Cookie
-        self.cookies.update(self.get_cookies_in_response_headers(response.headers))
-
         selector = Selector(response.text)
         for item in selector.css('div.rb'):
             title = item.css('h3>a')[0].text.strip()
@@ -87,7 +88,7 @@ class Sogou(SearchEngine):
                 req = HttpRequest('https://www.sogou.com/')
                 await self.extension.handle_request(req)
                 resp = await self.downloader.fetch(req)
-                self.cookies.update(self.get_cookies_in_response_headers(resp.headers))
+                self.cookies.update(self.get_cookies_in_response(resp))
             except Exception as e:
                 log.warning('Failed to update cookies: %s', e)
             finally:

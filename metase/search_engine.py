@@ -3,7 +3,7 @@
 import inspect
 from http.cookies import SimpleCookie
 
-from xpaw import HttpHeaders, HttpResponse
+from xpaw import HttpHeaders, HttpResponse, HttpRequest
 
 from metase.utils import walk_modules
 
@@ -56,14 +56,27 @@ class SearchEngine:
         """
         raise NotImplemented
 
-    def get_cookies_in_response_headers(self, headers: HttpHeaders):
+    def before_request(self, request: HttpRequest):
+        """
+        请求前的处理函数
+        """
+
+    def after_request(self, response: HttpResponse):
+        """
+        请求后的处理函数
+        """
+
+    def get_cookies_in_response(self, response: HttpResponse):
         cookies = SimpleCookie()
-        for s in headers.get_list('Set-Cookie'):
+        for s in response.headers.get_list('Set-Cookie'):
             cookies.load(s)
         return cookies
 
-    def convert_to_cookie_header(self, cookies: SimpleCookie):
-        return '; '.join('{}={}'.format(k, v.value) for k, v in cookies.items())
+    def set_cookie_header(self, request: HttpRequest, cookies: SimpleCookie):
+        if request.headers is None:
+            request.headers = HttpHeaders()
+        h = '; '.join('{}={}'.format(k, v.value) for k, v in cookies.items())
+        request.headers.add('Cookie', h)
 
 
 def load_search_engines():

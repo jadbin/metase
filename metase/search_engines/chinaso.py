@@ -5,7 +5,7 @@ from urllib.request import quote, urljoin
 import asyncio
 from http.cookies import SimpleCookie
 
-from xpaw import Selector, HttpRequest, HttpHeaders
+from xpaw import Selector, HttpRequest
 from xpaw.errors import HttpError
 
 from metase.search_engine import SearchEngine
@@ -35,14 +35,15 @@ class Chinaso(SearchEngine):
             url = 'http://www.chinaso.com/search/pagesearch.htm?q={}&page={}&wd={}'.format(quote(query),
                                                                                            num // self.page_size + 1,
                                                                                            quote(query))
-            headers = HttpHeaders()
-            headers.add('Cookie', self.convert_to_cookie_header(self.cookies))
-            yield HttpRequest(url, headers=headers)
+            yield HttpRequest(url)
+
+    def before_request(self, request):
+        self.set_cookie_header(request, self.cookies)
+
+    def after_request(self, response):
+        self.cookies.update(self.get_cookies_in_response(response))
 
     def extract_results(self, response):
-        # 更新Cookie
-        self.cookies.update(self.get_cookies_in_response_headers(response.headers))
-
         selector = Selector(response.text)
         for item in selector.css('li.reItem'):
             a = item.css('h2>a')
@@ -67,7 +68,7 @@ class Chinaso(SearchEngine):
                     resp = await self.downloader.fetch(req)
                 except HttpError as e:
                     resp = e.response
-                cookies = self.get_cookies_in_response_headers(resp.headers)
+                cookies = self.get_cookies_in_response(resp)
                 self.cookies.update(cookies)
             except Exception as e:
                 log.warning('Failed to update cookies: %s', e)
