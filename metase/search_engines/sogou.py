@@ -16,7 +16,7 @@ class Sogou(SearchEngine):
     fake_url = True
     source_importance = 2
 
-    page_size = 50
+    page_size = 20
 
     def __init__(self):
         self.cookies = SimpleCookie()

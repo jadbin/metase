@@ -18,7 +18,7 @@ class Baidu(SearchEngine):
     fake_url = True
     source_importance = 2
 
-    page_size = 50
+    page_size = 20
 
     def search_url(self, query):
         return 'https://www.baidu.com/s?wd={}'.format(quote(query))
