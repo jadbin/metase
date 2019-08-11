@@ -44,14 +44,7 @@ class MseServer:
         self.downloader = Downloader(max_clients=config.get('max_clients'))
         self.extension = ExtensionManager(UserAgentMiddleware(user_agent=':desktop'))
         self.search_engines = self._load_search_engines()
-        slaves = config.get('slaves')
-        # 没有配置slave的情况下将自身设置为slave
-        if not slaves:
-            slaves = [{
-                'address': 'localhost:{}'.format(config['port']),
-                'allow': '*'
-            }]
-        self.slave_map = self._make_slave_map(slaves)
+        self.slave_map = self._make_slave_map()
         self.workers = []
         self.work_queue = FifoQueue()
 
@@ -145,7 +138,15 @@ class MseServer:
         SearchEngine.config = self.config
         return load_search_engines()
 
-    def _make_slave_map(self, slaves):
+    def _make_slave_map(self):
+        slaves = self.config.get('slaves')
+        # 没有配置slave的情况下将自身设置为slave
+        if not slaves:
+            slaves = [{
+                'address': 'localhost:{}'.format(self.config['port']),
+                'allow': '*'
+            }]
+
         slave_map = defaultdict(list)
         for s in slaves:
             slave = Slave(s['address'], self)
