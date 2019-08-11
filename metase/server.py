@@ -161,7 +161,7 @@ class MseServer:
     async def _process_req_list(self, req_list, name, task, index):
         if len(req_list) <= 0:
             task.set_result(index, [])
-        t = GatherTask(len(req_list))
+        t = GatherTask(len(req_list), early_stop=True)
         for i in range(len(req_list)):
             await self.work_queue.push(self._get_response(req_list[i], name, t, i))
         await t.done(timeout=self.config.get('timeout'))
@@ -189,7 +189,7 @@ class MseServer:
                     return
                 if self.search_engines[name].fake_url:
                     task.update_result(index, res)
-                    t = GatherTask(len(res))
+                    t = GatherTask(len(res), early_stop=True)
                     for i in range(len(res)):
                         await self.work_queue.push(self._get_real_url(res[i], name, t, i))
                     await t.done(timeout=self.config.get('timeout'))
