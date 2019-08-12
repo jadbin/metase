@@ -8,14 +8,15 @@ class GatherTask:
     NO_RESULT = object()
 
     def __init__(self, n, early_stop=False):
-        self.early_stop = early_stop
         self._done = asyncio.Future()
         self.result = []
         for i in range(n):
             self.result.append(self.NO_RESULT)
         self.completed = 0
+        self.early_stop = early_stop
         self.start_time = None
-        self.log_time = []
+        self.task_log = []
+        self._early_stop_future = None
 
     async def _complete_delay(self, timeout):
         await asyncio.sleep(timeout)
@@ -34,6 +35,7 @@ class GatherTask:
     def set_result(self, index, result=None):
         assert 0 <= index < len(self.result)
         if not self.is_done():
+            self.task_log.append(dict(index=index, completed_time=time.time()))
             self.result[index] = result
             self.completed += 1
             if self.completed >= len(self.result):
@@ -43,13 +45,12 @@ class GatherTask:
                     self._try_early_stop()
 
     def _try_early_stop(self):
-        self.log_time.append(time.time())
-        if len(self.log_time) / len(self.result) > 0.5:
-            avg = 0
-            for t in self.log_time:
-                avg += t - self.start_time
-            avg /= len(self.log_time)
-            asyncio.ensure_future(self._complete_delay(avg))
+        if len(self.task_log) / len(self.result) > 0.5:
+            max_t = 0
+            for t in self.task_log:
+                max_t += max(max_t, t['completed_time'] - self.start_time)
+            if self._early_stop_future is None:
+                self._early_stop_future = asyncio.ensure_future(self._complete_delay(max_t))
 
     def update_result(self, index, result):
         assert 0 <= index < len(self.result)
