@@ -46,12 +46,8 @@ class MseServer:
         self.extension = ExtensionManager(UserAgentMiddleware(user_agent=':desktop'))
         self.search_engines = self._load_search_engines()
         self.slave_map = self._make_slave_map()
-        self.workers = []
-        self.work_queue = FifoQueue()
 
     def on_start(self):
-        self._init_workers()
-
         apis = [
             ('/api/v{}/fetch'.format(self.api_version), FetchHanlder, dict(server=self))
         ]
@@ -62,20 +58,6 @@ class MseServer:
         port = self.config.get('port')
         app.listen(port, host)
         log.info('meta search service is available on %s:%s', host, port)
-
-    def _init_workers(self):
-        # 有可能获取结果的协程占用worker等待处理fake url，因此数量*2
-        for i in range(self.downloader.max_clients * 2):
-            f = asyncio.ensure_future(self._do_work())
-            self.workers.append(f)
-
-    async def _do_work(self):
-        while True:
-            req = await self.work_queue.pop()
-            try:
-                await req
-            except Exception:
-                log.warning('work failed', exc_info=True)
 
     async def meta_search(self, query, **kwargs):
         sources = kwargs.get('sources')
@@ -164,7 +146,7 @@ class MseServer:
             task.set_result(index, [])
         t = GatherTask(len(req_list), early_stop=True)
         for i in range(len(req_list)):
-            await self.work_queue.push(self._get_response(req_list[i], name, t, i))
+            asyncio.ensure_future(self._get_response(req_list[i], name, t, i))
         await t.done(timeout=self.config.get('timeout'))
 
         res = []
@@ -192,7 +174,7 @@ class MseServer:
                     task.update_result(index, res)
                     t = GatherTask(len(res), early_stop=True)
                     for i in range(len(res)):
-                        await self.work_queue.push(self._get_real_url(res[i], name, t, i))
+                        await asyncio.ensure_future(self._get_real_url(res[i], name, t, i))
                     await t.done(timeout=self.config.get('timeout'))
                 return res
 
