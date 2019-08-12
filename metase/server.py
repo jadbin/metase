@@ -19,6 +19,7 @@ from xpaw.errors import HttpError, ClientError
 from xpaw.extensions import UserAgentMiddleware
 from xpaw.extension import ExtensionManager
 from xpaw.queue import FifoQueue
+from xpaw.renderer import ChromeRenderer
 
 from metase.search_engine import load_search_engines, SearchEngine
 from metase.slave import Slave
@@ -41,7 +42,7 @@ class MseServer:
     def __init__(self, config):
         self.config = config
         self.api_version = self.config.get('api_version')
-        self.downloader = Downloader(max_clients=config.get('max_clients'))
+        self.downloader = Downloader(max_clients=config.get('max_clients'), renderer=ChromeRenderer())
         self.extension = ExtensionManager(UserAgentMiddleware(user_agent=':desktop'))
         self.search_engines = self._load_search_engines()
         self.slave_map = self._make_slave_map()

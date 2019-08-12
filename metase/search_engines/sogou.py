@@ -58,7 +58,7 @@ class Sogou(SearchEngine):
         if max_records is None:
             max_records = self.page_size
         for num in range(0, max_records, self.page_size):
-            url = '{}&page={}'.format(raw_url, num // self.page_size + 1)
+            url = '{}&page={}&ie=utf8'.format(raw_url, num // self.page_size + 1)
             yield HttpRequest(url)
 
     def before_request(self, request):
@@ -69,12 +69,19 @@ class Sogou(SearchEngine):
 
     def extract_results(self, response):
         selector = Selector(response.text)
-        for item in selector.css('div.rb'):
-            title = item.css('h3>a')[0].text.strip()
+        for item in selector.css('div.vrwrap,div.rb'):
+            h = item.css('h3>a')
+            if len(h) <= 0:
+                continue
+            title = h[0].text.strip()
             text = None
             div_ft = item.css('div.ft')
             if len(div_ft) > 0:
                 text = div_ft[0].text.strip()
+            else:
+                p_str = item.css('p.str_info')
+                if len(p_str) > 0:
+                    text = p_str[0].text.strip()
             url = urljoin('https://www.sogou.com/', item.css('h3>a')[0].attr('href').strip())
             if text is not None:
                 yield {'title': title, 'text': text, 'url': url}
