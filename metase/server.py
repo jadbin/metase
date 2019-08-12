@@ -316,6 +316,7 @@ class SearchHandler(RequestHandler):
         self.set_header('Access-Control-Allow-Methods', 'POST, PUT, GET, DELETE, OPTIONS')
 
     async def get(self):
+        start_time = time.time()
         query = self.get_argument('query')
         sources = self.get_argument('sources', default=None)
         data_source_results = self.get_argument('data_source_results', default=None)
@@ -330,6 +331,7 @@ class SearchHandler(RequestHandler):
                                                        data_source_results=data_source_results,
                                                        recent_days=recent_days,
                                                        site=site)
+        log.info('meta search is done, remote ip: %s, duration: %s', self.request.remote_ip, round(time.time() - start_time, 3))
         self.write(packed_results)
         self.finish()
 
