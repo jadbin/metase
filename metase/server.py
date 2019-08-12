@@ -331,7 +331,8 @@ class SearchHandler(RequestHandler):
                                                        data_source_results=data_source_results,
                                                        recent_days=recent_days,
                                                        site=site)
-        log.info('meta search is done, remote ip: %s, duration: %s', self.request.remote_ip, round(time.time() - start_time, 3))
+        log.info('meta search is done, arguments: %s, remote ip: %s, duration: %s',
+                 self.request.query, self.request.remote_ip, round(time.time() - start_time, 3))
         self.write(packed_results)
         self.finish()
 
