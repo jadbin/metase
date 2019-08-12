@@ -48,7 +48,7 @@ class GatherTask:
         if len(self.task_log) / len(self.result) > 0.5:
             max_t = 0
             for t in self.task_log:
-                max_t += max(max_t, t['completed_time'] - self.start_time)
+                max_t = max(max_t, t['completed_time'] - self.start_time)
             if self._early_stop_future is None:
                 self._early_stop_future = asyncio.ensure_future(self._complete_delay(max_t))
 
