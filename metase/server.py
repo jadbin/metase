@@ -18,7 +18,6 @@ from xpaw import Downloader, HttpRequest
 from xpaw.errors import HttpError, ClientError
 from xpaw.extensions import UserAgentMiddleware
 from xpaw.extension import ExtensionManager
-from xpaw.queue import FifoQueue
 from xpaw.renderer import ChromeRenderer
 
 from metase.search_engine import load_search_engines, SearchEngine
@@ -53,7 +52,7 @@ class MseServer:
         ]
         if not self.config.get('only_slave'):
             apis.append(('/api/v{}/search'.format(self.api_version), SearchHandler, dict(server=self)))
-        app = Application(apis)
+        app = Application(apis, compress_response=True)
         host = self.config.get('host')
         port = self.config.get('port')
         app.listen(port, host)
