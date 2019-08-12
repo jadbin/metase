@@ -174,7 +174,7 @@ class MseServer:
                     task.update_result(index, res)
                     t = GatherTask(len(res), early_stop=True)
                     for i in range(len(res)):
-                        await asyncio.ensure_future(self._get_real_url(res[i], name, t, i))
+                        asyncio.ensure_future(self._get_real_url(res[i], name, t, i))
                     await t.done(timeout=self.config.get('timeout'))
                 return res
 
