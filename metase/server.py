@@ -86,10 +86,10 @@ class MseServer:
                 req[s].append(r)
 
         req_index = [i for i in req.keys()]
-        task = GatherTask(len(req_index))
+        task = GatherTask(len(req_index), self.config.get('timeout'))
         for i in range(len(req_index)):
             asyncio.ensure_future(self._process_req_list(req[req_index[i]], req_index[i], task, i))
-        await task.done(timeout=self.config.get('timeout'))
+        await task.done()
 
         res = {}
         for i in range(len(req_index)):
@@ -143,10 +143,10 @@ class MseServer:
     async def _process_req_list(self, req_list, name, task, index):
         if len(req_list) <= 0:
             task.set_result(index, [])
-        t = GatherTask(len(req_list), early_stop=True)
+        t = GatherTask(len(req_list), early_stop=True, timeout=self.config.get('timeout'))
         for i in range(len(req_list)):
             asyncio.ensure_future(self._get_response(req_list[i], name, t, i))
-        await t.done(timeout=self.config.get('timeout'))
+        await t.done()
 
         res = []
         for rlist in t.result:
@@ -171,10 +171,10 @@ class MseServer:
                     return
                 if self.search_engines[name].fake_url:
                     task.update_result(index, res)
-                    t = GatherTask(len(res), early_stop=True)
+                    t = GatherTask(len(res), early_stop=True, timeout=self.config.get('timeout'))
                     for i in range(len(res)):
                         asyncio.ensure_future(self._get_real_url(res[i], name, t, i))
-                    await t.done(timeout=self.config.get('timeout'))
+                    await t.done()
                 return res
 
         result = await _fetch()

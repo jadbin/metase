@@ -20,7 +20,7 @@ class Baidu(SearchEngine):
     fake_url = True
     source_importance = 2
 
-    page_size = 20
+    page_size = 10
 
     def __init__(self):
         self.cookies = SimpleCookie()
@@ -55,7 +55,7 @@ class Baidu(SearchEngine):
             raw_url = 'http://www.baidu.com/s?wd={}'.format(quote(query))
 
         for num in range(0, max_records, self.page_size):
-            url = '{}&pn={}&rn={}'.format(raw_url, num, self.page_size)
+            url = '{}&pn={}'.format(raw_url, num)
             yield HttpRequest(url)
 
     def extract_results(self, response):
