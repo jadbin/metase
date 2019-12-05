@@ -2,6 +2,8 @@
 
 import logging
 from urllib.request import quote
+from http.cookies import SimpleCookie
+import asyncio
 
 from metase.search_engine import SearchEngine
 
@@ -19,6 +21,10 @@ class Baidu(SearchEngine):
     source_importance = 2
 
     page_size = 20
+
+    def __init__(self):
+        self.cookies = SimpleCookie()
+        asyncio.ensure_future(self.update_cookies())
 
     def search_url(self, query):
         return 'https://www.baidu.com/s?wd={}'.format(quote(query))
@@ -63,3 +69,24 @@ class Baidu(SearchEngine):
             url = item.css('h3>a')[0].attr('href').strip()
             if text is not None:
                 yield {'title': title, 'text': text, 'url': url}
+
+    def before_request(self, request):
+        self.set_cookie_header(request, self.cookies)
+
+    def after_request(self, response):
+        self.cookies.update(self.get_cookies_in_response(response))
+
+    async def update_cookies(self):
+        """
+        避免被BAN，定时通过主页刷新Cookie
+        """
+        while True:
+            try:
+                req = HttpRequest('http://www.baidu.com/')
+                await self.extension.handle_request(req)
+                resp = await self.downloader.fetch(req)
+                self.cookies.update(self.get_cookies_in_response(resp))
+            except Exception as e:
+                log.warning('Failed to update cookies: %s', e)
+            finally:
+                await asyncio.sleep(5 * 60)
